@@ -69,6 +69,7 @@ class HumantypeGUI:
         self.start_para_var = tk.StringVar(value="1")
         self.end_para_var = tk.StringVar(value="")
         self.scripted_var = tk.StringVar(value="")
+        self.format_target_var = tk.StringVar(value="word")
 
         # Pause/time-range customization.  Populated from the active config.
         self.pause_vars: dict[str, tk.StringVar] = {}
@@ -187,6 +188,18 @@ class HumantypeGUI:
         ttk.Label(scripted_row, text="Scripted mistakes JSON (optional):").pack(side="left")
         ttk.Entry(scripted_row, textvariable=self.scripted_var, width=52).pack(side="left", padx=4)
         ttk.Button(scripted_row, text="Browse...", command=self._pick_scripted).pack(side="left")
+
+        format_target_row = ttk.Frame(settings_frame)
+        format_target_row.grid(row=6, column=0, columnspan=7, sticky="w", padx=6, pady=2)
+        ttk.Label(format_target_row, text="Formatting target:").pack(side="left")
+        self.format_target_combo = ttk.Combobox(
+            format_target_row, textvariable=self.format_target_var, state="readonly", width=36,
+            values=["word (exact via Word COM)", "gdocs (Google Docs clipboard paste)"],
+        )
+        self.format_target_combo.pack(side="left", padx=4)
+        ttk.Label(format_target_row,
+                  text="(used by 'Apply exact source formatting' - for gdocs, keep the tab focused)").pack(
+            side="left")
 
         button_frame = ttk.Frame(self.root)
         button_frame.pack(fill="x", **pad)
@@ -556,7 +569,19 @@ class HumantypeGUI:
             self.last_log_path = result.get("log_path")
 
             if not result["aborted"] and self.format_var.get():
-                if word_com.available():
+                if self.format_target_var.get().startswith("gdocs"):
+                    if mode == "com":
+                        self.queue.put(("status", "formatting skipped: gdocs target needs focused mode"))
+                    else:
+                        try:
+                            from .gdocs_format import apply_gdocs_formatting
+                            apply_gdocs_formatting(
+                                source,
+                                status_cb=lambda msg: self.queue.put(("status", msg)),
+                            )
+                        except Exception as exc:
+                            self.queue.put(("status", f"Google Docs formatting failed: {exc}"))
+                elif word_com.available():
                     self.queue.put(("status", "applying exact source formatting..."))
                     self._apply_formatting(source, word, target_index)
                     self.queue.put(("status", "exact formatting applied"))

@@ -91,6 +91,7 @@ continue from the last finished paragraph.
 | **Preview source & pick...** | Opens a scrollable list of every paragraph in the source. Click a paragraph, then **Set as start** or **Set as end** (or **Clear** for the whole document). |
 | **Pause/time settings...** | Opens a dialog where you can customize every pause range: word pauses, comma pauses, sentence pauses, paragraph pauses, chunk (look-back) pauses, thinking pauses, idle gaps (phone-check breaks), and key hold times. |
 | **Scripted mistakes JSON (optional)** | Instead of random typos, load a JSON file that lists exactly which mistakes happen, where, and how they're noticed. While loaded, random errors are disabled — only your scripted mistakes occur. |
+| **Formatting target** | Chooses where the *"Apply exact source formatting"* pass runs: **Word** (exact via Word COM) or **Google Docs** (clipboard paste — see below). |
 
 ### Checkboxes
 
@@ -135,8 +136,16 @@ the background, so **you can keep using your computer**. Tradeoffs:
 
 Keystrokes can only type plain text, so exact formatting is applied in two
 steps: (1) the text is typed like a human, then (2) the final document is made
-an exact formatted copy of the source with one Word automation pass. You see
-the typing happen, and the document ends up matching the source exactly.
+a formatted copy of the source. You see the typing happen, and the document
+ends up matching the source.
+
+- **Word** (default): the formatting pass uses Word automation and is exact
+  (fonts, bold/italic, colors, headings, lists, tables, images).
+- **Google Docs**: the formatting pass builds an HTML version of the source,
+  puts it on the Windows clipboard, and sends Ctrl+A / Ctrl+V in the focused
+  Google Docs tab. Google Docs pastes the formatting (bold, italics, fonts,
+  headings, lists, tables). Keep the tab focused during this pass; your
+  previous clipboard content is restored afterwards.
 
 ---
 
@@ -174,7 +183,8 @@ humantype type notes.md --dry-run             # preview the keystroke stream
 humantype type notes.md --wpm 60 --error-rate 0.05
 humantype type notes.md --resume              # continue from saved progress
 humantype type notes.md --save-interval 4     # auto-save every ~4 minutes
-humantype type notes.md --apply-formatting    # hybrid formatting pass
+humantype type notes.md --apply-formatting    # hybrid formatting pass (Word)
+humantype type notes.md --apply-formatting --format-target gdocs  # Google Docs pass
 humantype type notes.md --scripted-mistakes mistakes.json
 humantype gui                                 # open the GUI
 humantype record -o my_typing.csv             # record your own typing (F9 to stop)
