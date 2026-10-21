@@ -1,14 +1,25 @@
-"""Fit timing/error parameters from a real recording to a profile file."""
+"""Fit timing/error parameters from a real recording to a profile file.
+
+Pure Python (no numpy), so it works in the slim EXE build as well.
+"""
 
 from __future__ import annotations
 
 import math
+import statistics
 
-import numpy as np
 import yaml
 
 from .analyze import compute_metrics, load_log
 from .keymaps import COMMON_BIGRAMS
+
+
+def _mean(values) -> float:
+    return statistics.fmean(values) if values else 0.0
+
+
+def _std(values) -> float:
+    return statistics.pstdev(values) if values else 0.0
 
 
 def calibrate(log_path: str, output: str = "humantype_profile.yaml"):
@@ -23,10 +34,10 @@ def calibrate(log_path: str, output: str = "humantype_profile.yaml"):
     if len(delays) < 20:
         raise SystemExit("not enough keystrokes to calibrate (need 20+ keydowns)")
 
-    log_delays = np.log(delays)
-    mu = float(np.mean(log_delays))
-    sigma = float(np.std(log_delays))
-    mean_delay = float(np.exp(mu + sigma ** 2 / 2.0))
+    log_delays = [math.log(d) for d in delays]
+    mu = _mean(log_delays)
+    sigma = _std(log_delays)
+    mean_delay = math.exp(mu + sigma ** 2 / 2.0)
     wpm = 12.0 / mean_delay if mean_delay > 0 else 45.0
 
     # Per-bigram speed multipliers relative to the overall mean.
@@ -45,7 +56,7 @@ def calibrate(log_path: str, output: str = "humantype_profile.yaml"):
             pair_delays.setdefault(pair, []).append(d)
     for pair, values in pair_delays.items():
         if len(values) >= 5:
-            ratio = float(np.mean(values)) / mean_delay
+            ratio = _mean(values) / mean_delay
             bigram_speeds[pair] = round(min(1.5, max(0.5, ratio)), 3)
 
     # Pause durations: long gaps after space / comma / sentence enders.
@@ -62,8 +73,8 @@ def calibrate(log_path: str, output: str = "humantype_profile.yaml"):
             sentence_pauses.append(gap)
 
     holds = [r["duration"] for r in keyups if r["duration"] and r["duration"] < 0.5]
-    hold_mean = float(np.mean(holds)) if holds else 0.09
-    hold_std = float(np.std(holds)) if holds else 0.02
+    hold_mean = _mean(holds) if holds else 0.09
+    hold_std = _std(holds) if holds else 0.02
 
     metrics = compute_metrics(rows)
     backspace_rate = metrics["backspace_rate"]
@@ -86,11 +97,11 @@ def calibrate(log_path: str, output: str = "humantype_profile.yaml"):
         },
     }
     if word_pauses:
-        profile["timing"]["word_pause_mean"] = round(float(np.mean(word_pauses)), 3)
+        profile["timing"]["word_pause_mean"] = round(_mean(word_pauses), 3)
     if comma_pauses:
-        profile["timing"]["comma_pause_mean"] = round(float(np.mean(comma_pauses)), 3)
+        profile["timing"]["comma_pause_mean"] = round(_mean(comma_pauses), 3)
     if sentence_pauses:
-        profile["timing"]["sentence_pause_mean"] = round(float(np.mean(sentence_pauses)), 3)
+        profile["timing"]["sentence_pause_mean"] = round(_mean(sentence_pauses), 3)
 
     with open(output, "w", encoding="utf-8") as fh:
         fh.write(f"# humantype profile calibrated from {log_path}\n")

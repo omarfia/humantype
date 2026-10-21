@@ -212,12 +212,25 @@ flags override it. See the comments in the file for every key.
 
 ## 7. Building the EXE yourself
 
+Two builds are available:
+
+| Build | File | Size | Difference |
+|---|---|---|---|
+| Full | `dist/humantype.exe` | ~50 MB | Analyze saves matplotlib charts |
+| Lite | `dist/humantype-lite.exe` | ~34 MB | No chart images; analyze still prints the full text report |
+
+The typing engine is identical in both — the size difference is only the
+chart library (matplotlib/numpy), which the Lite build drops.
+
 ```bash
 pip install pyinstaller
-python build_exe.py        # or: pyinstaller --noconfirm --clean humantype.spec
+python build_exe.py          # full build
+python build_exe.py --lite   # lite build (no chart library)
 ```
 
-The single-file executable is written to `dist/humantype.exe`.
+Optional: put [UPX](https://upx.github.io/) on your `PATH` before building and
+PyInstaller will compress the EXE further (that is how the sizes above are
+achieved).
 
 ## 8. For developers
 
