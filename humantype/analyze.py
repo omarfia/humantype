@@ -1,12 +1,15 @@
-"""Analyze humantype logs (simulated or recorded) and compare them."""
+"""Analyze humantype logs (simulated or recorded) and compare them.
+
+This module is pure Python (no numpy), so it works in the slim EXE build.
+Matplotlib is optional and only used for charts when it is installed.
+"""
 
 from __future__ import annotations
 
 import csv
 import math
 import os
-
-import numpy as np
+import statistics
 
 try:
     import matplotlib
@@ -17,6 +20,45 @@ except Exception:  # pragma: no cover
     HAS_MPL = False
 
 CSV_FIELDS = ["timestamp", "elapsed", "key", "delay", "event_type", "duration", "detail"]
+
+
+def _mean(values: list[float]) -> float:
+    return statistics.fmean(values) if values else 0.0
+
+
+def _std(values: list[float]) -> float:
+    return statistics.pstdev(values) if values else 0.0
+
+
+def _percentile(values: list[float], q: float) -> float:
+    if not values:
+        return 0.0
+    s = sorted(values)
+    k = (len(s) - 1) * (q / 100.0)
+    lo = math.floor(k)
+    hi = math.ceil(k)
+    if lo == hi:
+        return s[int(k)]
+    return s[int(lo)] * (hi - k) + s[int(hi)] * (k - lo)
+
+
+def _ks_score(a: list[float], b: list[float]) -> float:
+    """1 - Kolmogorov-Smirnov distance between two samples."""
+    if not a or not b:
+        return float("nan")
+    a = sorted(a)
+    b = sorted(b)
+    combined = sorted(set(a) | set(b))
+    n, m = len(a), len(b)
+    ia = ib = 0
+    dmax = 0.0
+    for x in combined:
+        while ia < n and a[ia] <= x:
+            ia += 1
+        while ib < m and b[ib] <= x:
+            ib += 1
+        dmax = max(dmax, abs(ia / n - ib / m))
+    return 1.0 - dmax
 
 
 def load_log(path: str) -> list[dict]:
@@ -92,8 +134,8 @@ def compute_metrics(rows: list[dict]) -> dict:
             current = 1 if r["delay"] is not None else 0
     if current > 0:
         bursts.append(current)
-    burst_mean = float(np.mean(bursts)) if bursts else 0.0
-    burst_max = float(np.max(bursts)) if bursts else 0
+    burst_mean = _mean(bursts)
+    burst_max = float(max(bursts)) if bursts else 0
 
     # Correction latency: typo keydown -> next backspace keydown.
     latencies = []
@@ -128,41 +170,26 @@ def compute_metrics(rows: list[dict]) -> dict:
         "backspace_rate": len(backspaces) / total_keys if total_keys else 0.0,
         "typo_rate": len(typos) / chars if chars else 0.0,
         "delays": delays,
-        "delay_mean": float(np.mean(delays)) if delays else 0.0,
-        "delay_std": float(np.std(delays)) if delays else 0.0,
-        "delay_p50": float(np.percentile(delays, 50)) if delays else 0.0,
-        "delay_p95": float(np.percentile(delays, 95)) if delays else 0.0,
+        "delay_mean": _mean(delays),
+        "delay_std": _std(delays),
+        "delay_p50": _percentile(delays, 50),
+        "delay_p95": _percentile(delays, 95),
         "pause_durations": pause_durations,
-        "pause_mean": float(np.mean(pause_durations)) if pause_durations else 0.0,
-        "pause_p50": float(np.percentile(pause_durations, 50)) if pause_durations else 0.0,
-        "pause_p95": float(np.percentile(pause_durations, 95)) if pause_durations else 0.0,
-        "hold_mean": float(np.mean(holds)) if holds else 0.0,
-        "hold_std": float(np.std(holds)) if holds else 0.0,
+        "pause_mean": _mean(pause_durations),
+        "pause_p50": _percentile(pause_durations, 50),
+        "pause_p95": _percentile(pause_durations, 95),
+        "hold_mean": _mean(holds),
+        "hold_std": _std(holds),
         "holds": holds,
         "rollover_rate": rollover_rate,
         "burst_mean": burst_mean,
         "burst_max": burst_max,
         "correction_latencies": latencies,
-        "correction_latency_mean": float(np.mean(latencies)) if latencies else 0.0,
+        "correction_latency_mean": _mean(latencies),
         "wpm_times": times,
         "wpm_values": wpms,
     }
     return metrics
-
-
-def _ks_score(a: list[float], b: list[float]) -> float:
-    """1 - Kolmogorov-Smirnov distance between two samples."""
-    if not a or not b:
-        return float("nan")
-    a = np.sort(np.asarray(a, dtype=float))
-    b = np.sort(np.asarray(b, dtype=float))
-    combined = np.unique(np.concatenate([a, b]))
-    if combined.size == 0:
-        return float("nan")
-    cdf_a = np.searchsorted(a, combined, side="right") / len(a)
-    cdf_b = np.searchsorted(b, combined, side="right") / len(b)
-    d = float(np.max(np.abs(cdf_a - cdf_b)))
-    return 1.0 - d
 
 
 def _rel_score(x: float, y: float) -> float:
@@ -184,7 +211,7 @@ def compare_metrics(real: dict, sim: dict) -> dict:
         real["correction_latency_mean"], sim["correction_latency_mean"]
     )
     valid = {k: v for k, v in scores.items() if not math.isnan(v)}
-    scores["overall"] = float(np.mean(list(valid.values()))) if valid else float("nan")
+    scores["overall"] = _mean(list(valid.values())) if valid else float("nan")
     return scores
 
 
@@ -225,7 +252,7 @@ def make_charts(logs: dict[str, dict], outdir: str):
 
         if m["delays"]:
             plt.figure(figsize=(8, 3))
-            plt.hist(np.asarray(m["delays"]) * 1000, bins=60, alpha=0.7)
+            plt.hist([d * 1000 for d in m["delays"]], bins=60, alpha=0.7)
             plt.title(f"{name}: inter-key delay distribution")
             plt.xlabel("delay (ms)")
             plt.ylabel("count")
@@ -234,8 +261,9 @@ def make_charts(logs: dict[str, dict], outdir: str):
             plt.close()
 
         if m["pause_durations"]:
+            clipped = [min(120.0, max(0.0, p)) for p in m["pause_durations"]]
             plt.figure(figsize=(8, 3))
-            plt.hist(np.clip(m["pause_durations"], 0, 120), bins=50, alpha=0.7)
+            plt.hist(clipped, bins=50, alpha=0.7)
             plt.title(f"{name}: pause duration histogram")
             plt.xlabel("pause (s)")
             plt.ylabel("count")
@@ -247,7 +275,7 @@ def make_charts(logs: dict[str, dict], outdir: str):
     if len(names) == 2 and logs[names[0]]["delays"] and logs[names[1]]["delays"]:
         plt.figure(figsize=(8, 3))
         for name in names:
-            plt.hist(np.asarray(logs[name]["delays"]) * 1000, bins=60, alpha=0.5, label=name)
+            plt.hist([d * 1000 for d in logs[name]["delays"]], bins=60, alpha=0.5, label=name)
         plt.title("inter-key delay: real vs simulated")
         plt.xlabel("delay (ms)")
         plt.legend()

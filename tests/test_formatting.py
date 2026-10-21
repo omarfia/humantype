@@ -54,3 +54,31 @@ def test_docx_source_is_used_directly(tmp_path):
     document.add_paragraph("Hello world")
     document.save(str(docx_path))
     assert get_formatting_docx(str(docx_path)) == str(docx_path)
+
+
+def test_docx_to_html_preserves_formatting(tmp_path):
+    from humantype.gdocs_format import docx_to_html
+
+    docx_path = tmp_path / "styled.docx"
+    document = Document()
+    document.add_heading("Title", level=1)
+    para = document.add_paragraph()
+    run = para.add_run("bold")
+    run.bold = True
+    para.add_run(" and ")
+    run = para.add_run("italic")
+    run.italic = True
+    document.add_paragraph("item one", style="List Bullet")
+    table = document.add_table(rows=1, cols=2)
+    table.cell(0, 0).text = "A"
+    table.cell(0, 1).text = "B"
+    document.save(str(docx_path))
+
+    html_out = docx_to_html(str(docx_path))
+    assert "<h1>Title</h1>" in html_out
+    assert "<b>bold</b>" in html_out
+    assert "<i>italic</i>" in html_out
+    assert "<ul>" in html_out
+    assert "<li>item one</li>" in html_out
+    assert "<table" in html_out
+    assert "<td>A</td>" in html_out

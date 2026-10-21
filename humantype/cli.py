@@ -43,6 +43,9 @@ def _add_common_type_flags(parser: argparse.ArgumentParser):
     parser.add_argument("--apply-formatting", action="store_true",
                         help="after typing, apply the source's exact formatting to the active "
                              "Word document (Windows + Word + pywin32)")
+    parser.add_argument("--format-target", choices=["word", "gdocs"], default="word",
+                        help="formatting target for --apply-formatting: word (Word COM) or "
+                             "gdocs (Google Docs clipboard paste; keep the tab focused)")
 
 
 def _build_type_parser(subparsers):
@@ -113,26 +116,32 @@ def cmd_type(args):
                         verify_docx=verify, send_final_save=verify is not None)
 
     if getattr(args, "apply_formatting", False) and not result["aborted"]:
-        from . import word_com
-        from .formatting import get_formatting_docx
-        from .normalize import normalize_text
-        print("applying exact source formatting via Word...")
-        fmt_docx = get_formatting_docx(args.source)
-        word = word_com.get_word(attach=True)
-        target = word.ActiveDocument
-        word_com.apply_exact_formatting(fmt_docx, target)
-        expected = extract_paragraphs(fmt_docx)
-        actual_text = normalize_text(word_com.document_text(target))
-        actual = [p for p in actual_text.split("\n\n") if p.strip()]
-        if actual == expected:
-            print("verification: formatting matches the source exactly")
+        if getattr(args, "format_target", "word") == "gdocs":
+            from .gdocs_format import apply_gdocs_formatting
+            print("applying source formatting to Google Docs (keep the tab focused)...")
+            apply_gdocs_formatting(args.source)
+            print("Google Docs formatting applied (clipboard restored)")
         else:
-            print("verification: text differences remain (see below)")
-            import difflib
-            diff = list(difflib.unified_diff(expected, actual, fromfile="source",
-                                             tofile="word", lineterm=""))
-            for line in diff[:40]:
-                print("  " + line)
+            from . import word_com
+            from .formatting import get_formatting_docx
+            from .normalize import normalize_text
+            print("applying exact source formatting via Word...")
+            fmt_docx = get_formatting_docx(args.source)
+            word = word_com.get_word(attach=True)
+            target = word.ActiveDocument
+            word_com.apply_exact_formatting(fmt_docx, target)
+            expected = extract_paragraphs(fmt_docx)
+            actual_text = normalize_text(word_com.document_text(target))
+            actual = [p for p in actual_text.split("\n\n") if p.strip()]
+            if actual == expected:
+                print("verification: formatting matches the source exactly")
+            else:
+                print("verification: text differences remain (see below)")
+                import difflib
+                diff = list(difflib.unified_diff(expected, actual, fromfile="source",
+                                                 tofile="word", lineterm=""))
+                for line in diff[:40]:
+                    print("  " + line)
 
 
 def cmd_gui(args):
