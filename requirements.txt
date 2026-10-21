@@ -1,0 +1,11 @@
+# Runtime dependencies for running humantype from source.
+# For the standalone Windows EXE none of these are needed.
+
+PyYAML>=6.0
+pdfplumber>=0.11
+python-docx>=1.1
+pynput>=1.7
+numpy>=1.26
+matplotlib>=3.8
+pywin32>=306; sys_platform == "win32"
+pyautogui>=0.9.54

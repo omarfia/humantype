@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# PyInstaller build output
+build/
+dist/
+*.spec.bak
+
+# humantype runtime artifacts
+humantype_log_*.csv
+.humantype_progress.json
+humantype_charts/
+humantype_record.csv
+humantype_profile.yaml
+t.pdf
+
+# OS / editor
+Thumbs.db
+.DS_Store
+.idea/
+.vscode/
+.deepcode/
